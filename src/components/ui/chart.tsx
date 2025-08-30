@@ -65,6 +65,23 @@ const ChartContainer = React.forwardRef<
 })
 ChartContainer.displayName = "Chart"
 
+// Sanitize CSS content to prevent injection attacks
+function sanitizeCSS(css: string): string {
+  // Remove potentially dangerous characters and sequences
+  return css
+    .replace(/[<>]/g, '') // Remove HTML angle brackets
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/expression\(/gi, '') // Remove CSS expressions
+    .replace(/[@\\]/g, '') // Remove @ and backslash
+    .replace(/url\(/gi, '') // Remove url() functions for safety
+}
+
+function sanitizeColor(color: string): string {
+  // Only allow valid CSS color formats (hex, rgb, hsl, named colors)
+  const validColorPattern = /^(#[0-9a-f]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\)|[a-z]+)$/i
+  return validColorPattern.test(color.trim()) ? color.trim() : ''
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
     ([_, config]) => config.theme || config.color
@@ -74,25 +91,40 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
+  // Sanitize the chart ID to prevent CSS injection
+  const sanitizedId = id.replace(/[^a-zA-Z0-9-_]/g, '')
+
+  const cssContent = Object.entries(THEMES)
+    .map(([theme, prefix]) => {
+      const themeRules = colorConfig
+        .map(([key, itemConfig]) => {
+          const color =
+            itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+            itemConfig.color
+          
+          if (!color) return null
+          
+          // Sanitize the color value and key
+          const sanitizedColor = sanitizeColor(color)
+          const sanitizedKey = key.replace(/[^a-zA-Z0-9-_]/g, '')
+          
+          return sanitizedColor ? `  --color-${sanitizedKey}: ${sanitizedColor};` : null
+        })
+        .filter(Boolean)
+        .join('\n')
+
+      return themeRules ? `${prefix} [data-chart="${sanitizedId}"] {\n${themeRules}\n}` : ''
+    })
+    .filter(Boolean)
+    .join('\n')
+
+  // Final sanitization of the entire CSS content
+  const sanitizedCSS = sanitizeCSS(cssContent)
+
   return (
     <style
       dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
-  })
-  .join("\n")}
-}
-`
-          )
-          .join("\n"),
+        __html: sanitizedCSS,
       }}
     />
   )
