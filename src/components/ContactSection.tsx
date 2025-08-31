@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
 
 const ContactSection = () => {
   const [formData, setFormData] = useState({
@@ -13,7 +14,13 @@ const ContactSection = () => {
     phone: "",
     message: "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  // Default endpoint and credentials (in production, these should come from environment variables)
+  const API_ENDPOINT = "https://n8n-n8n-ok.7gwdxt.easypanel.host/webhook-test/1b2ee5c6-0d89-423d-b3d3-0dc4f2d6fe24";
+  const AUTH_USERNAME = "admin";
+  const AUTH_PASSWORD = "admin";
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -23,22 +30,57 @@ const ContactSection = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Simulate form submission
-    toast({
-      title: "Mensagem enviada!",
-      description: "Entrarei em contato em breve para agendarmos sua consulta.",
-    });
+    try {
+      // Prepare the data payload
+      const payload = {
+        nome: formData.name,
+        email: formData.email,
+        mensagem: formData.message,
+        telefone: formData.phone
+      };
 
-    // Reset form
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      message: "",
-    });
+      // Create basic auth header
+      const credentials = btoa(`${AUTH_USERNAME}:${AUTH_PASSWORD}`);
+      
+      // Make the API call
+      const response = await axios.post(API_ENDPOINT, payload, {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000, // 10 second timeout
+      });
+
+      // Success feedback
+      toast({
+        title: "Mensagem enviada!",
+        description: "Entrarei em contato em breve para agendarmos sua consulta.",
+      });
+
+      // Reset form on success
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        message: "",
+      });
+
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      
+      // Error feedback
+      toast({
+        title: "Erro ao enviar mensagem",
+        description: "Ocorreu um erro ao enviar sua mensagem. Tente novamente ou entre em contato diretamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
@@ -167,10 +209,11 @@ const ContactSection = () => {
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full bg-fitness-primary hover:bg-fitness-primary-dark text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-[var(--shadow-fitness)]"
+                  disabled={isSubmitting}
+                  className="w-full bg-fitness-primary hover:bg-fitness-primary-dark text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-[var(--shadow-fitness)] disabled:opacity-50 disabled:transform-none"
                 >
                   <Send className="mr-2" size={20} />
-                  Enviar Mensagem
+                  {isSubmitting ? "Enviando..." : "Enviar Mensagem"}
                 </Button>
               </form>
             </CardContent>
